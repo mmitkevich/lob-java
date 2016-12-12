@@ -12,6 +12,7 @@ import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.runner.JUnitCore;
 
+import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.results.RunResult;
 import org.openjdk.jmh.runner.options.Options;
@@ -268,7 +269,7 @@ public class OrderBookTest
             "-XX:+HeapDumpOnOutOfMemoryError"
     };
 
-    //@Test
+    @Test
     public void bench() throws Exception {
 
         Options opt = new OptionsBuilder()
@@ -309,7 +310,7 @@ public class OrderBookTest
 
     public final static int NITERS = 20_000_000;
 
-    //@Benchmark
+    @Benchmark
     @Test
     public void bookBench() {
         AtomicInteger events = new AtomicInteger(0);
@@ -377,7 +378,7 @@ public class OrderBookTest
             emitter.run();
         }
         ns = System.nanoTime()-ns;
-        LOG.info(String.format("ELAPSED %.2f s, THROUGHPUT: %.3f mio/s", ns/1e9, niters/1e6/(ns/1e9)));
+        LOG.info(String.format("ITERATIONS: %.2f mio, ELAPSED %.2f s, THROUGHPUT: %.3f mio/s", niters/1e6, ns/1e9, niters/1e6/(ns/1e9)));
     }
 
     public static void main(String[] args) throws Exception {

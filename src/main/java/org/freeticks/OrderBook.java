@@ -1,7 +1,9 @@
 package org.freeticks;
 
+import net.openhft.chronicle.core.UnsafeMemory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.nio.ch.DirectBuffer;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
@@ -75,6 +77,8 @@ public class OrderBook
         final int LENGTH     = 36;
 
         ByteBuffer bytes;
+        long address;
+
         int head;
         int tail;
         int capacity;
@@ -83,6 +87,7 @@ public class OrderBook
             this.capacity = capacity;
             bytes = ByteBuffer.allocateDirect(LENGTH * capacity);
             head = tail = 0;
+            address = ((DirectBuffer) bytes).address();
         }
 
         public int capacity() {
@@ -120,43 +125,59 @@ public class OrderBook
             setGoodTill(i, 0);
         }
 
-        int addr(int i){
-            return i*LENGTH;
+        long addr(long i, long offset){
+            return address + i*LENGTH + offset;
+        }
+
+        long getLong(long addr) {
+            return UnsafeMemory.UNSAFE.getLong(addr);
+        }
+
+        void putLong(long addr, long value) {
+            UnsafeMemory.UNSAFE.putLong(addr, value);
+        }
+
+        int getInt(long addr) {
+            return UnsafeMemory.UNSAFE.getInt(addr);
+        }
+
+        void putInt(long addr, int value) {
+            UnsafeMemory.UNSAFE.putInt(addr, value);
         }
 
         public long price(int i) {
-            return bytes.getLong(addr(i) + PRICE);
+            return getLong(addr(i, PRICE));
         }
-        void setPrice(int i, long value) { bytes.putLong(addr(i) + PRICE, value);}
+        void setPrice(int i, long value) { putLong(addr(i, PRICE), value);}
 
         public long volume(int i) {
-            long value = bytes.getLong(addr(i) + VOLUME);
+            long value = getLong(addr(i, VOLUME));
             return value;
         }
 
         void setVolume(int i, long value) {
-            bytes.putLong(addr(i) + VOLUME, value);
+            putLong(addr(i, VOLUME), value);
         }
 
         public int next(int i) {
-            return bytes.getInt(addr(i) + NEXT) - 1;
+            return getInt(addr(i, NEXT)) - 1;
         }
         void setNext(int i, int value) {
-            bytes.putInt(addr(i) + NEXT, value + 1);
+            putInt(addr(i, NEXT), value + 1);
         }
 
         public long goodTill(int i) {
-            return bytes.getLong(addr(i) + GOODTILL);
+            return getLong(addr(i, GOODTILL));
         }
         void setGoodTill(int i, long value) {
-            bytes.putLong(addr(i) + GOODTILL, value);
+            putLong(addr(i, GOODTILL), value);
         }
 
         public long cookie(int i) {
-            return bytes.getLong(addr(i) + COOKIE);
+            return getLong(addr(i, COOKIE));
         }
         void setCookie(int i, long value) {
-            bytes.putLong(addr(i) + COOKIE, value);
+            putLong(addr(i, COOKIE), value);
         }
     }
 
@@ -170,6 +191,8 @@ public class OrderBook
         final int LENGTH = 16;
 
         ByteBuffer bytes;
+        long address;
+
         long min;
         long max;
 
@@ -180,6 +203,7 @@ public class OrderBook
             this.arena = arena;
             int cap = (int)(max-min+1)*LENGTH;
             bytes = ByteBuffer.allocateDirect(cap);
+            address = ((DirectBuffer)bytes).address();
             this.min = min;
             this.max = max;
         }
@@ -190,34 +214,45 @@ public class OrderBook
             return head(i) == -1;
         }
 
-        int addr(long price) {
-            return (int)((price-min) * LENGTH);
+        long addr(long price, long offset) {
+            return (price-min) * LENGTH + address + offset;
         }
+
+        long getLong(long addr) {
+            return UnsafeMemory.UNSAFE.getLong(addr);
+        }
+
+        void putLong(long addr, long value) {
+            UnsafeMemory.UNSAFE.putLong(addr, value);
+        }
+
+        int getInt(long addr) {
+            return UnsafeMemory.UNSAFE.getInt(addr);
+        }
+
+        void putInt(long addr, int value) {
+            UnsafeMemory.UNSAFE.putInt(addr, value);
+        }
+
 
         public long volume(long price) {
-            return bytes.getLong(addr(price) + VOLUME);
+            return getLong(addr(price, VOLUME));
         }
         void setVolume(long price, long value) {
-            bytes.putLong(addr(price) + VOLUME, value);
+            putLong(addr(price, VOLUME), value);
         }
 
-        public int head(long price) { return bytes.getInt(addr(price) + HEAD) -1; }
+        public int head(long price) { return getInt(addr(price, HEAD)) -1; }
         void setHead(long i, int value) {
-            bytes.putInt(addr(i) + HEAD, value + 1);
+            putInt(addr(i, HEAD), value + 1);
         }
 
         public int tail(long i) {
-            return bytes.getInt(addr(i) + TAIL) - 1;
+            return getInt(addr(i, TAIL)) - 1;
         }
         void setTail(long i, int value) {
-            bytes.putInt(addr(i) + TAIL, value + 1) ;
+            putInt(addr(i, TAIL), value + 1) ;
         }
-
-       // public long nextFreeSlot(long price) { return bytes.getLong(addr(price)+ NEXT); }
-       // void setNext(long price, long value) { this.bytes.putLong(addr(price) + NEXT, value);}
-
-       // public long prev(long price) { return bytes.getLong(addr(price)+ PREV); }
-       // void setPrev(long price, long value) { this.bytes.putLong(addr(price) + PREV, value);}
 
         void free(long price) {
             int i;
@@ -376,9 +411,9 @@ public class OrderBook
 
     private int place(long volume, long price, long cookie, long goodTill) {
 
-        if(size>4*orders.capacity()/5) {
-            LOG.info("capacity exhausted");
-        }
+        //if(size>4*orders.capacity()/5) {
+        //    LOG.info("capacity exhausted");
+        //}
 
         int nextId = orders.nextFreeSlot();
 
@@ -466,6 +501,7 @@ public class OrderBook
 
     private long matchLevel(long price, int headId, long activeVolume, int activeId, long activeCookie){
         while (headId != -1) {
+            // TODO: expire here?
             long passiveVolume = orders.volume(headId);
             int activeDir = 1;
             if(activeVolume < 0) {
@@ -504,43 +540,47 @@ public class OrderBook
 
     public long match(long activeVolume, long price, int activeId, long activeCookie) {
         long dir = activeVolume > 0 ? 1:-1;
-        //long best = dir > 0 ? bestBid:bestAsk;
-        //long last = dir > 0 ? highPrice:lowPrice;
 
         // this will loop hard to find nextFreeSlot not empty price with some orders to set best bid/best ask
         if(dir>0) {
-            while(bestAsk<=highPrice) {
-                int headId = index.head(bestAsk);
-                if (bestAsk<=price && activeVolume!=0 && headId != -1) {
-                    activeVolume = matchLevel(bestAsk, headId, activeVolume, activeId, activeCookie);
+            for(;;) {
+                if(bestAsk>highPrice){
+                    bestAsk = NO_ASK;
+                    highPrice = bestBid;
+                    if (bestBid == NO_BID) {
+                        lowPrice = NO_ASK;
+                    }
+                    break;
+                }
+                if(activeVolume!=0) {
+                    int headId = index.head(bestAsk);
+                    if (headId != -1 && bestAsk <= price) {
+                        activeVolume = matchLevel(bestAsk, headId, activeVolume, activeId, activeCookie);
+                    }
                 }
                 if(!index.isEmpty(bestAsk))
                     break;  // some volume left
                 bestAsk++;
             }
-            if(bestAsk>highPrice) {
-                bestAsk = NO_ASK;
-                highPrice = bestBid;
-                if (bestBid == NO_BID) {
-                    lowPrice = NO_ASK;
-                }
-            }
         }else{
-            while(bestBid>=lowPrice) {
-                int headId = index.head(bestBid);
-                if (bestBid>=price && activeVolume!=0 && headId != -1) {
-                    activeVolume = matchLevel(bestBid, headId, activeVolume, activeId, activeCookie);
+            for(;;) {
+                if(bestBid<lowPrice) {
+                    bestBid = NO_BID;
+                    lowPrice = bestAsk;
+                    if (bestAsk == NO_ASK) {
+                        highPrice = NO_BID;
+                    }
+                    break;
+                }
+                if(activeVolume!=0) {
+                    int headId = index.head(bestBid);
+                    if (headId != -1 && bestBid >= price) {
+                        activeVolume = matchLevel(bestBid, headId, activeVolume, activeId, activeCookie);
+                    }
                 }
                 if(!index.isEmpty(bestBid))
                     break;  // some volume left
                 bestBid--;
-            }
-            if(bestBid<lowPrice) {
-                bestBid = NO_BID;
-                lowPrice = bestAsk;
-                if (bestAsk == NO_ASK) {
-                    highPrice = NO_BID;
-                }
             }
         }
         return activeVolume;

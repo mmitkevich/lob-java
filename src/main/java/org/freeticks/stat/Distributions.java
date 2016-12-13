@@ -1,4 +1,4 @@
-package org.freeticks;
+package org.freeticks.stat;
 
 import java.util.Random;
 

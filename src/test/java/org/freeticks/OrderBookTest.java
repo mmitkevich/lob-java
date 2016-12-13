@@ -5,8 +5,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.freeticks.OrderBook.Event.*;
+import static org.freeticks.OrderEvent.*;
 
+import com.google.common.collect.Iterables;
+import eu.exante.freeticks.OffHeapBook;
+import eu.exante.freeticks.OrderEmitter;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
@@ -42,8 +45,8 @@ public class OrderBookTest
             .outerRule(new JmhCleaner(OrderBookTest.class))
             .around(JavaAgentSkip.ifPresent());
 
-    OrderBook book(ArrayList<OrderMessage> events) {
-        OrderBook book = OrderBook.builder()
+    OffHeapBook book(ArrayList<OrderMessage> events) {
+        OffHeapBook book = OffHeapBook.builder()
                 .range(-10000,10000)
                 .onEvent((evt, filled, active, price, id, cookie) -> events.add(new OrderMessage(evt,filled,active,price,id,cookie)))
                 .onError((evt, id, cookie) -> events.add(new OrderMessage(evt,0,0,0,id,cookie)))
@@ -54,11 +57,11 @@ public class OrderBookTest
     @Test
     public void place() {
         ArrayList<OrderMessage> events = new ArrayList<>();
-        OrderBook book = book(events);
+        OffHeapBook book = book(events);
 
         events.clear();
 
-        int bid100 = book.placeLimit(10,     100,   555, OrderBook.GTC);
+        long bid100 = book.place(10L,     100L,   555L);
 
         assertThat(events).flatExtracting(
                                 Order::evt, Order::active, Order::filled,   Order::price,     Order::cookie).containsExactly(
@@ -66,7 +69,7 @@ public class OrderBookTest
 
         events.clear();
 
-        int ask101 = book.placeLimit(-10,    101,   666,  OrderBook.GTC);
+        long ask101 = book.place(-10,    101,   666);
 
         assertThat(events).flatExtracting(
                                 Order::evt, Order::active,  Order::filled,  Order::price,   Order::cookie).containsExactly(
@@ -78,21 +81,22 @@ public class OrderBookTest
         assertThat(book.ask()).isEqualTo(101);
         assertThat(book.levels().volume(book.bid())).isEqualTo(10);
         assertThat(book.levels().volume(book.ask())).isEqualTo(-10);
-        assertThat(book.levels()).containsExactly(new Level(10, 100), new Level(-10, 101));
+        Level[] lvls = Iterables.toArray(book.levels(),Level.class);
+        assertThat(lvls).containsExactly(new Level(10, 100), new Level(-10, 101));
     }
 
 
     @Test
     public void cancel() {
         ArrayList<OrderMessage> events = new ArrayList<>();
-        OrderBook book = book(events);
+        OffHeapBook book = book(events);
 
         events.clear();
 
-        int bid100 = book.placeLimit(10,     100, 555, OrderBook.GTC);
+        long bid100 = book.place(10,     100, 555);
         assertThat(book.bid()).isEqualTo(100);
 
-        int ask101 = book.placeLimit(-10,    101, 666, OrderBook.GTC);
+        long ask101 = book.place(-10,    101, 666);
         assertThat(book.ask()).isEqualTo(101);
 
         events.clear();
@@ -112,11 +116,11 @@ public class OrderBookTest
     @Test
     public void cancel_last_bid() {
         ArrayList<OrderMessage> events = new ArrayList<>();
-        OrderBook book = book(events);
+        OffHeapBook book = book(events);
 
         events.clear();
 
-        int bid100 = book.placeLimit(10,     100, 555, OrderBook.GTC);
+        long bid100 = book.place(10,     100,    555);
 
         events.clear();
         LOG.info(book.toString());
@@ -125,8 +129,8 @@ public class OrderBookTest
                 Order::evt,   Order::active,    Order::filled,    Order::price,     Order::cookie,    Order::id).containsExactly(
                 CANCEL,         (long)10,       (long)0,            (long)100,      (long)555,      (long)bid100);
         LOG.info(book.toString());
-        assertThat(book.hasAsk()).isFalse();
-        assertThat(book.hasBid()).isFalse();
+        assertThat(book.hasAsks()).isFalse();
+        assertThat(book.hasBids()).isFalse();
         assertThat(book.bid()).isEqualTo(OrderBook.NO_BID);
         assertThat(book.ask()).isEqualTo(OrderBook.NO_ASK);
         assertThat(book.low()).isEqualTo(OrderBook.NO_ASK);
@@ -139,38 +143,38 @@ public class OrderBookTest
     @Test
     public void trade() {
         ArrayList<OrderMessage> events = new ArrayList<>();
-        OrderBook book = book(events);
+        OffHeapBook book = book(events);
 
         events.clear();
-        int bid100 = book.placeLimit(10,     100, 555, OrderBook.GTC);
+        long bid100 = book.place(10,     100,    555);
 
         events.clear();
-        int ask101 = book.placeLimit(-10,    100, 666, OrderBook.GTC);
+        long ask101 = book.place(-10,    100,   666);
         assertThat(events).flatExtracting(
                 Order::evt,   Order::active,  Order::filled,    Order::price,   Order::cookie,    Order::id). containsExactly(
                 FILL,       (long) 0,      (long) 10,      (long) 100,  (long)555,      (long)0,
                 FILL,       (long) -10,     (long)-10,      (long) 100,  (long)666,      (long)1);
-        assertThat(book.hasAsk()).isFalse();
-        assertThat(book.hasBid()).isFalse();
+        assertThat(book.hasAsks()).isFalse();
+        assertThat(book.hasBids()).isFalse();
         assertThat(book.size()==0);
     }
 
     @Test
     public void trade_through() {
         ArrayList<OrderMessage> events = new ArrayList<>();
-        OrderBook book = book(events);
+        OffHeapBook book = book(events);
 
         events.clear();
-        int bid100 = book.placeLimit(10,     100,   555, OrderBook.GTC);
+        long bid100 = book.place(10,     100,   555);
 
         events.clear();
-        int ask101 = book.placeLimit(-10,    50,    666, OrderBook.GTC);
+        long ask101 = book.place(-10,    50,    666);
         assertThat(events).flatExtracting(
                 Order::evt,   Order::active,  Order::filled,    Order::price,   Order::cookie,    Order::id). containsExactly(
                 FILL,       (long) 0,      (long) 10,      (long) 100,  (long)555,      (long)0,
                 FILL,       (long)-10,     (long)-10,      (long) 100,  (long)666,      (long)1);
-        assertThat(book.hasAsk()).isFalse();
-        assertThat(book.hasBid()).isFalse();
+        assertThat(book.hasAsks()).isFalse();
+        assertThat(book.hasBids()).isFalse();
         assertThat(book.size()==0);
         assertThat(book.size()).isEqualTo(0);
     }
@@ -179,15 +183,15 @@ public class OrderBookTest
     //@Test
     public void trade_through_two() {
         ArrayList<OrderMessage> events = new ArrayList<>();
-        OrderBook book = book(events);
+        OffHeapBook book = book(events);
 
         events.clear();
-        book.placeLimit(2,     100,   43, OrderBook.GTC);
-        book.placeLimit(10,    100,   63, OrderBook.GTC);
-        book.placeLimit(2,     102,   62, OrderBook.GTC);
+        book.place(2,     100,   43);
+        book.place(10,    100,   63);
+        book.place(2,     102,   62);
         LOG.info(book.toString());
         events.clear();
-        book.placeLimit(-10,    101,  64, OrderBook.GTC);
+        book.place(-10,    101,  64);
         LOG.info(book.toString());
         /*assertThat(events).flatExtracting(
                 Order::evt,   Order::active,  Order::filled,    Order::price,   Order::cookie,    Order::id). containsExactly(
@@ -195,11 +199,11 @@ public class OrderBookTest
                 FILL,       (long) 10,     (long) 10,      (long) 101,  (long)666,      (long)3
                 PLACE,      (long) -10,     (long) 0,      (long) 101,  (long)666,      (long)3
                 );*/
-        assertThat(book.hasBid()).isTrue();
+        assertThat(book.hasBids()).isTrue();
         assertThat(book.bid()).isEqualTo(100);
         assertThat(book.bidVolume()).isEqualTo(12);
 
-        assertThat(book.hasAsk()).isTrue();
+        assertThat(book.hasAsks()).isTrue();
         assertThat(book.ask()).isEqualTo(101);
         assertThat(book.askVolume()).isEqualTo(-10);
 
@@ -210,22 +214,22 @@ public class OrderBookTest
     @Test
     public void trade_head() {
         ArrayList<OrderMessage> events = new ArrayList<>();
-        OrderBook book = book(events);
+        OffHeapBook book = book(events);
 
         events.clear();
-        int bid555 = book.placeLimit(10,     100,       555,    OrderBook.GTC);
-        int bid777 = book.placeLimit(20,     100,      777,     OrderBook.GTC);
+        long bid555 = book.place(10,     100,        555);
+        long bid777 = book.place(20,     100,        777);
 
         events.clear();
 
-        int ask666 = book.placeLimit(-10,    100,       666,    OrderBook.GTC);
-        assertThat(book.orders().volume(ask666)==0);
+        long ask666 = book.place(-10,    100,       666);
+        assertThat(book.volume(ask666)==0);
 
         assertThat(events).flatExtracting(
                 Order::evt,   Order::active,  Order::filled,    Order::price,   Order::cookie,    Order::id). containsExactly(
                 FILL,       (long) 0,      (long) 10,      (long) 100,          (long)555,      (long)bid555,
                 FILL,       (long)-10,     (long)-10,      (long) 100,          (long)666,      (long)ask666);
-        assertThat(book.hasAsk()).isFalse();
+        assertThat(book.hasAsks()).isFalse();
         assertThat(book.bid()).isEqualTo(100);
         assertThat(book.high()).isEqualTo(100);
         assertThat(book.low()).isEqualTo(100);
@@ -234,23 +238,23 @@ public class OrderBookTest
     @Test
     public void trade_head_partial() {
         ArrayList<OrderMessage> events = new ArrayList<>();
-        OrderBook book = book(events);
+        OffHeapBook book = book(events);
 
         events.clear();
-        int bid555 = book.placeLimit(10,     100,       555,    OrderBook.GTC);
-        int bid777 = book.placeLimit(20,     100,      777,     OrderBook.GTC);
+        long bid555 = book.place(10,     100,        555);
+        long bid777 = book.place(20,     100,        777);
 
         events.clear();
 
-        int ask666 = book.placeLimit(-3,    100,       666,     OrderBook.GTC);
-        assertThat(book.orders().volume(ask666)==0);
+        long ask666 = book.place(-3,    100,       666);
+        assertThat(book.volume(ask666)==0);
 
         // here active means taking liquidity volume
         assertThat(events).flatExtracting(
                 Order::evt,   Order::active,  Order::filled,    Order::price,   Order::cookie,    Order::id). containsExactly(
                 PARTFILL,       (long) 0,      (long) 3,      (long) 100,          (long)555,      (long)bid555,
                 FILL,           (long)-3,      (long)-3,      (long) 100,          (long)666,      (long)ask666);
-        assertThat(book.hasAsk()).isFalse();
+        assertThat(book.hasAsks()).isFalse();
         assertThat(book.bid()).isEqualTo(100);
         assertThat(book.high()).isEqualTo(100);
         assertThat(book.low()).isEqualTo(100);
@@ -308,20 +312,20 @@ public class OrderBookTest
         }
     }
 
-    public final static int NITERS = 20_000_000;
+    public final static int NITERS = 10_000_000;
 
     @Benchmark
     @Test
     public void bookBench() {
         AtomicInteger events = new AtomicInteger(0);
-        //PriorityQueue<OrderMessage> orders = new PriorityQueue<>(new Comparator<OrderMessage>() {
+        //PriorityQueue<OrderMessage> at = new PriorityQueue<>(new Comparator<OrderMessage>() {
         //    @Override
         //    public int compare(OrderMessage o1, OrderMessage o2) {
         //        return (int)(o1.clientTime()-o2.clientTime());
         //    }
         //});
 
-        OrderBook book = OrderBook.builder()
+        OffHeapBook book = OffHeapBook.builder()
                 //.range(-10000, 10000)
                 .onEvent((evt, filled, active, price, id, cookie) -> {
                         events.incrementAndGet();
@@ -332,17 +336,17 @@ public class OrderBookTest
                 })
                 .build();
 
-        OrderEmitter emitter = new TestOrderEmitter.Builder()
+        OrderEmitter emitter = new OrderEmitter.TestOrderEmitter.Builder()
                 .onEvent((evt, volume, price, time) -> {
                     if(!NO_LOGS)
                         book.selfcheck();
-                    int id = -1;
+                    long id = -1;
                     long cookie = time;
                     if(evt==CANCEL) {
-                        if(volume>=0 && !book.hasBid() || volume<0 && !book.hasAsk())
+                        if(volume>=0 && !book.hasBids() || volume<0 && !book.hasAsks())
                             return;
-                        id = volume>0 ? book.levels().head(book.bid()) : book.levels().head(book.ask());
-                        cookie = book.orders().cookie(id);
+                        id = volume>0 ? book.head(book.bid()) : book.head(book.ask());
+                        cookie = book.cookie(id);
 
                         if(id<0){
                             assert(false);

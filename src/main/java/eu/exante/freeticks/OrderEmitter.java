@@ -1,8 +1,9 @@
-package org.freeticks;
+package eu.exante.freeticks;
+
+import org.freeticks.stat.Distributions;
+import org.freeticks.OrderEvent;
 
 import java.util.Random;
-
-import static org.freeticks.OrderBook.Event.PLACE;
 
 public class OrderEmitter {
     public double marketIntensity = 1.0;
@@ -23,7 +24,7 @@ public class OrderEmitter {
     public long minPrice;
 
     public interface ActionHandler {
-        void apply(OrderBook.Event evt, long volume, long price, long time);
+        void apply(int evt, long volume, long price, long time);
     }
 
     public OrderEmitter(Builder params)
@@ -119,9 +120,9 @@ public class OrderEmitter {
         if(handler!=null)
         {
             time++;
-            handler.apply(PLACE, bidVolume, bestBid, time);
+            handler.apply(OrderEvent.PLACE, bidVolume, bestBid, time);
             time++;
-            handler.apply(PLACE, -askVolume, bestAsk, time);
+            handler.apply(OrderEvent.PLACE, -askVolume, bestAsk, time);
         }
     }
 
@@ -133,34 +134,35 @@ public class OrderEmitter {
 
         k = distrib.poisson(marketIntensity);
         if(k>0)
-            emit(OrderBook.Event.FILL, k); // market sell order
+            emit(OrderEvent.FILL, k); // market sell order
 
         k = distrib.poisson(cancelIntensity);
         if(k>0)
-            emit(OrderBook.Event.CANCEL, k); // limit buy order cancel
+            emit(OrderEvent.CANCEL, k); // limit buy order cancel
 
         k = distrib.poisson(limitIntensity);
         if(k>0)
-            emit(PLACE, k); // new limit buy order
+            emit(OrderEvent.PLACE, k); // new limit buy order
 
         k = distrib.poisson(marketIntensity);
         if(k>0)
-            emit(OrderBook.Event.FILL, -k);
+            emit(OrderEvent.FILL, -k);
 
         k = distrib.poisson(cancelIntensity);
         if(k>0)
-            emit(OrderBook.Event.CANCEL, -k);
+            emit(OrderEvent.CANCEL, -k);
 
         k = distrib.poisson(limitIntensity);
         if(k>0)
-            emit(PLACE, -k);
+            emit(OrderEvent.PLACE, -k);
     }
-    public void emit(OrderBook.Event evt, long vol) {
+
+    public void emit(int evt, long vol) {
         int size = 0;
         switch(evt) {
-            case FILL: evt = PLACE; size = -1; break;   // FILL means PLACE aggressively
-            case CANCEL: size = -1; break;
-            case PLACE: size = 1; break;
+            case OrderEvent.FILL: evt = OrderEvent.PLACE; size = -1; break;   // FILL means PLACE aggressively
+            case OrderEvent.CANCEL: size = -1; break;
+            case OrderEvent.PLACE: size = 1; break;
             default: throw new IllegalArgumentException();
         }
 
@@ -185,5 +187,35 @@ public class OrderEmitter {
 
     }
 
+    /**
+     * Created by mike on 12.12.16.
+     */
+    public static class TestOrderEmitter extends OrderEmitter {
+
+        public TestOrderEmitter(OrderEmitter.Builder params){
+            super(params);
+        }
+
+        public static class Builder extends OrderEmitter.Builder<TestOrderEmitter> {
+            public TestOrderEmitter build(){
+                return new TestOrderEmitter(this);
+            }
+        }
+
+        public void run() {
+            int k;
+
+            if (handler != null) {
+                handler.apply(OrderEvent.PLACE, 1, bestBid, time);
+                time++;
+                handler.apply(OrderEvent.CANCEL, 1, bestBid, time);
+                time++;
+                handler.apply(OrderEvent.PLACE, 1, bestBid, time);
+                time++;
+                handler.apply(OrderEvent.PLACE, -1, bestBid, time);
+                time++;
+            }
+        }
+    }
 }
 

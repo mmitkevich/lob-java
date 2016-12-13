@@ -1,60 +1,47 @@
 package org.freeticks;
 
-import java.util.function.Consumer;
+public final class OrderMessage extends Message implements Order {
+    long filled;
+    long active;
+    long price;
 
+    public OrderMessage() { }
 
-public class OrderMessage implements Order {
-    private OrderBook.Event evt;
-    private long filled;
-    private long active;
-    private long price;
-    private long id;
-    private long cookie;
-    private long serverTime;
-    private long clientTime;
-
-    public OrderMessage(OrderBook.Event evt) {
+    public OrderMessage(int evt) {
         this.evt = evt;
     }
 
-    public OrderMessage(OrderBook.Event evt, long filled, long active, long price, long id, long cookie) {
+    public OrderMessage(int evt, long filled, long active, long price, long id, long cookie) {
+        super(evt, id);
         this.evt = evt;
         this.filled = filled;
         this.active = active;
         this.price = price;
-        this.id = id;
         this.cookie = cookie;
     }
-
-    public OrderMessage mutate(Consumer<OrderMessage> mutator) {
-        mutator.accept(this);
-        return this;
-    }
-
 
     @Override
     public String toString() {
         return String.format("%s{active:%d, price:%d, filled:%d, id:%d, cookie:%d}", evt, active, price, filled, id, cookie);
     }
 
-    @Override
-    public OrderBook.Event evt() {
-        return evt;
-    }
-
-    @Override
-    public long id() {
-        return id;
-    }
 
     @Override
     public long price() {
         return price;
     }
 
+    public void setPrice(long value) {
+        this.price = value;
+    }
+
     @Override
     public long active() {
         return active;
+    }
+
+    public void setActive(long value) {
+        this.active = value;
     }
 
     @Override
@@ -63,17 +50,8 @@ public class OrderMessage implements Order {
     }
 
     @Override
-    public long serverTime() {
-        return serverTime;
+    public void setFilled(long value) {
+        this.filled = value;
     }
 
-    @Override
-    public long clientTime() {
-        return clientTime;
-    }
-
-    @Override
-    public long cookie() {
-        return cookie;
-    }
 }

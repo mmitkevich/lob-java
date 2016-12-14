@@ -1,4 +1,4 @@
-package eu.exante.freeticks;
+package org.freeticks.lob;
 
 import net.openhft.chronicle.core.annotation.ForceInline;
 import org.freeticks.*;

@@ -8,8 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.freeticks.OrderEvent.*;
 
 import com.google.common.collect.Iterables;
-import eu.exante.freeticks.OffHeapBook;
-import eu.exante.freeticks.OrderEmitter;
+import org.freeticks.lob.OffHeapBook;
+import org.freeticks.lob.OrderEmitter;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;

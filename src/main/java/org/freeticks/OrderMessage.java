@@ -49,7 +49,6 @@ public final class OrderMessage extends Message implements Order {
         return filled;
     }
 
-    @Override
     public void setFilled(long value) {
         this.filled = value;
     }

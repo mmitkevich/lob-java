@@ -1,4 +1,4 @@
-package eu.exante.freeticks;
+package org.freeticks.lob;
 
 import org.freeticks.stat.Distributions;
 import org.freeticks.OrderEvent;
